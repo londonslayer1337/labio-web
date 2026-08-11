@@ -4,6 +4,7 @@ from typing import List
 
 import asyncpg
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from passlib.context import CryptContext
 from pydantic import BaseModel
@@ -15,10 +16,10 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 db_pool: asyncpg.Pool = None
 
 # --- ПОДКЛЮЧЕНИЕ К SUPABASE ПО DATABASE_URL ---
-DATABASE_URL = os.environ.get("postgresql://postgres:[Zima26032022123]@db.qcygykbubjgmvgnuyzzw.supabase.co:5432/postgres")
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 
-# --- МЕНЕДЖЕР ЖИЗНЕННОГО ЦИКЛА ПРИЛОЖЕНИЯ (Замена устаревшего on_event) ---
+# --- МЕНЕДЖЕР ЖИЗНЕННОГО ЦИКЛА ПРИЛОЖЕНИЯ ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global db_pool
@@ -61,6 +62,15 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="OpenMS Backend", lifespan=lifespan)
+
+# --- НАСТРОЙКА CORS ДЛЯ РАБОТЫ С КАСТОМНЫМИ ДОМЕНАМИ (openms.ddns.net) ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # --- ПАРАМЕТРЫ И СХЕМЫ PYDANTIC ---
