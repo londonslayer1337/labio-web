@@ -1,48 +1,90 @@
 import os
-import sys
-import json
+from contextlib import asynccontextmanager
 from typing import List
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Header
-from fastapi.responses import HTMLResponse
-from fastapi.middleware.cors import CORSMiddleware
-from passlib.context import CryptContext
+
 import asyncpg
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
+from passlib.context import CryptContext
+from pydantic import BaseModel
 
-app = FastAPI()
-
-# Настройка CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Хеширование паролей
+# --- НАСТРОЙКИ ХЭШИРОВАНИЯ ПАРОЛЕЙ ---
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Берем ссылку на Supabase из переменных окружения (в Hugging Face Settings)
-DATABASE_URL = os.environ.get("postgresql://postgres:[Zima26032022!?]@db.qcygykbubjgmvgnuyzzw.supabase.co:5432/postgres")
+# --- ГЛОБАЛЬНЫЙ ПУЛ СОЕДИНЕНИЙ С БАЗОЙ ДАННЫХ ---
+db_pool: asyncpg.Pool = None
 
-db_pool = None
+# --- ПОДКЛЮЧЕНИЕ К SUPABASE ПО DATABASE_URL ---
+DATABASE_URL = os.environ.get("postgresql://postgres:[Zima26032022123]@db.qcygykbubjgmvgnuyzzw.supabase.co:5432/postgres")
 
-@app.on_event("startup")
-async def startup():
+
+# --- МЕНЕДЖЕР ЖИЗНЕННОГО ЦИКЛА ПРИЛОЖЕНИЯ (Замена устаревшего on_event) ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     global db_pool
-    if DATABASE_URL:
-        # asyncpg требует ssl для подключения к Supabase
-        db_pool = await asyncpg.create_pool(DATABASE_URL, ssl="require")
+    if not DATABASE_URL:
+        print("ВНИМАНИЕ: Переменная DATABASE_URL не задана!")
     else:
-        print("ВНИМАНИЕ: DATABASE_URL не задан в переменных окружения!")
+        # Создаем пул подключений к PostgreSQL (Supabase)
+        db_pool = await asyncpg.create_pool(dsn=DATABASE_URL)
+        print("Подключение к Supabase успешно установлено.")
 
-@app.on_event("shutdown")
-async def shutdown():
+        # Автоматическое создание таблиц, если их ещё нет в БД
+        async with db_pool.acquire() as conn:
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS users (
+                    id SERIAL PRIMARY KEY,
+                    username TEXT UNIQUE NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    display_name TEXT NOT NULL,
+                    phone TEXT,
+                    is_admin BOOLEAN DEFAULT FALSE
+                );
+                CREATE TABLE IF NOT EXISTS messages (
+                    id SERIAL PRIMARY KEY,
+                    sender_username TEXT NOT NULL,
+                    sender_name TEXT NOT NULL,
+                    text TEXT NOT NULL,
+                    is_pinned BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                );
+            """
+            )
+
+    yield  # Приложение принимает запросы
+
+    # Завершение работы: закрываем пул подключений
     if db_pool:
         await db_pool.close()
+        print("Подключение к базе данных закрыто.")
 
-# --- МЕНЕДЖЕР ВЕБСОКЕТОВ ---
+
+app = FastAPI(title="OpenMS Backend", lifespan=lifespan)
+
+
+# --- ПАРАМЕТРЫ И СХЕМЫ PYDANTIC ---
+class UserRegister(BaseModel):
+    username: str
+    password: str
+    display_name: str
+    phone: str = None
+
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+
+class MessageSend(BaseModel):
+    sender_username: str
+    sender_name: str
+    text: str
+
+
+# --- МЕНЕДЖЕР WEBSOCKET СОЕДИНЕНИЙ ---
 class ConnectionManager:
+
     def __init__(self):
         self.active_connections: List[WebSocket] = []
 
@@ -55,157 +97,177 @@ class ConnectionManager:
             self.active_connections.remove(websocket)
 
     async def broadcast(self, message: dict):
-        payload = json.dumps(message)
         for connection in self.active_connections:
             try:
-                await connection.send_text(payload)
+                await connection.send_json(message)
             except Exception:
                 pass
 
+
 manager = ConnectionManager()
 
-# --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
 
-def get_password_hash(password):
+# --- ХЕЛПЕРЫ ДЛЯ ХЭШИРОВАНИЯ ---
+def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
-# --- ЭНДПОИНТЫ АВТОРИЗАЦИИ И ПОЛЬЗОВАТЕЛЕЙ ---
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
+
+
+# --- МАРШРУТЫ API ---
+
+
+@app.get("/", response_class=HTMLResponse)
+async def get_index():
+    """Отдает главную страницу index.html, если она лежит в той же папке."""
+    if os.path.exists("index.html"):
+        with open("index.html", "r", encoding="utf-8") as f:
+            return f.read()
+    return HTMLResponse(
+        content="<h1>OpenMS Server работает</h1><p>Файл index.html не найден в корневой директории.</p>",
+        status_code=200,
+    )
+
+
 @app.post("/api/register")
-async def register(data: dict):
-    username = data.get("username", "").strip().lower()
-    password = data.get("password", "")
-    display_name = data.get("display_name", "").strip()
-
-    if not username or not password or not display_name:
-        raise HTTPException(status_code=400, detail="Заполните все поля")
-
-    if not username.startswith("@"):
-        username = "@" + username
-
-    hashed = get_password_hash(password)
-
-    async with db_pool.acquire() as conn:
-        # Проверяем, существует ли пользователь
-        existing = await conn.fetchrow("SELECT id FROM users WHERE username = $1", username)
-        if existing:
-            raise HTTPException(status_code=400, detail="Этот @username уже занят")
-        
-        # Регистрируем (первый пользователь может быть сделан админом)
-        await conn.execute(
-            "INSERT INTO users (username, password_hash, display_name) VALUES ($1, $2, $3)",
-            username, hashed, display_name
+async def register(user: UserRegister):
+    if not db_pool:
+        raise HTTPException(
+            status_code=500, detail="База данных не подключена"
         )
 
-    return {"status": "ok", "message": "Регистрация успешна"}
+    async with db_pool.acquire() as conn:
+        existing_user = await conn.fetchrow(
+            "SELECT id FROM users WHERE username = $1", user.username
+        )
+        if existing_user:
+            raise HTTPException(
+                status_code=400, detail="Пользователь с таким логином уже существует"
+            )
+
+        hashed_pwd = hash_password(user.password)
+        await conn.execute(
+            """
+            INSERT INTO users (username, password_hash, display_name, phone)
+            VALUES ($1, $2, $3, $4)
+        """,
+            user.username,
+            hashed_pwd,
+            user.display_name,
+            user.phone,
+        )
+
+    return {"status": "ok", "message": "Регистрация прошла успешно"}
+
 
 @app.post("/api/login")
-async def login(data: dict):
-    username = data.get("username", "").strip().lower()
-    password = data.get("password", "")
-
-    if not username.startswith("@"):
-        username = "@" + username
+async def login(user: UserLogin):
+    if not db_pool:
+        raise HTTPException(
+            status_code=500, detail="База данных не подключена"
+        )
 
     async with db_pool.acquire() as conn:
-        user = await conn.fetchrow("SELECT * FROM users WHERE username = $1", username)
-        if not user or not verify_password(password, user["password_hash"]):
-            raise HTTPException(status_code=401, detail="Неверный username или пароль")
+        db_user = await conn.fetchrow(
+            "SELECT username, password_hash, display_name, is_admin FROM users WHERE username = $1",
+            user.username,
+        )
+
+        if not db_user or not verify_password(
+            user.password, db_user["password_hash"]
+        ):
+            raise HTTPException(
+                status_code=400, detail="Неверный логин или пароль"
+            )
 
         return {
             "status": "ok",
-            "username": user["username"],
-            "display_name": user["display_name"],
-            "phone": user["phone"],
-            "is_admin": user["is_admin"]
+            "user": {
+                "username": db_user["username"],
+                "display_name": db_user["display_name"],
+                "is_admin": db_user["is_admin"],
+            },
         }
 
-@app.get("/api/check-username/{username}")
-async def check_username(username: str):
-    if not username.startswith("@"):
-        username = "@" + username
 
-    async with db_pool.acquire() as conn:
-        user = await conn.fetchrow("SELECT id FROM users WHERE username = $1", username.lower())
-        return {"available": user is None}
-
-# --- УПРАВЛЕНИЕ НАСТРОЙКАМИ И АНОНИМНЫМ НОМЕРОМ ---
-@app.post("/api/user/update-phone")
-async def update_phone(data: dict):
-    username = data.get("username")
-    phone = data.get("phone")
-
-    async with db_pool.acquire() as conn:
-        await conn.execute("UPDATE users SET phone = $1 WHERE username = $2", phone, username)
-    return {"status": "ok"}
-
-# --- СООБЩЕНИЯ И ВЕБСОКЕТЫ ---
 @app.get("/api/messages")
 async def get_messages():
+    if not db_pool:
+        raise HTTPException(
+            status_code=500, detail="База данных не подключена"
+        )
+
     async with db_pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT id, sender_username, sender_name, text, is_pinned, created_at FROM messages ORDER BY id ASC LIMIT 100"
+            """
+            SELECT id, sender_username, sender_name, text, is_pinned, created_at 
+            FROM messages 
+            ORDER BY id ASC 
+            LIMIT 100
+        """
         )
-        messages = []
-        for r in rows:
-            messages.append({
+        messages = [
+            {
                 "id": r["id"],
-                "username": r["sender_username"],
-                "sender": r["sender_name"],
+                "sender_username": r["sender_username"],
+                "sender_name": r["sender_name"],
                 "text": r["text"],
-                "is_pinned": r["is_pinned"]
-            })
+                "is_pinned": r["is_pinned"],
+                "created_at": (
+                    r["created_at"].isoformat() if r["created_at"] else None
+                ),
+            }
+            for r in rows
+        ]
         return messages
+
+
+# --- WEBSOCKET ДЛЯ ИНТЕРАКТИВНОГО ЧАТА В РЕАЛЬНОМ ВРЕМЕНИ ---
+
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         while True:
-            raw_data = await websocket.receive_text()
-            data = json.loads(raw_data)
-            action = data.get("action", "send")
+            data = await websocket.receive_json()
 
-            async with db_pool.acquire() as conn:
-                if action == "send":
-                    row = await conn.fetchrow(
-                        "INSERT INTO messages (sender_username, sender_name, text) VALUES ($1, $2, $3) RETURNING id",
-                        data["username"], data["sender"], data["text"]
-                    )
-                    broadcast_data = {
-                        "type": "new_message",
-                        "id": row["id"],
-                        "username": data["username"],
-                        "sender": data["sender"],
-                        "text": data["text"],
-                        "is_pinned": False
-                    }
-                    await manager.broadcast(broadcast_data)
+            # Обработка отправки нового сообщения
+            if data.get("type") == "message":
+                sender_username = data.get("sender_username", "Anon")
+                sender_name = data.get("sender_name", "Аноним")
+                text = data.get("text", "")
 
-                elif action == "delete":
-                    msg_id = data.get("id")
-                    await conn.execute("DELETE FROM messages WHERE id = $1", msg_id)
-                    await manager.broadcast({"type": "delete_message", "id": msg_id})
+                if text.strip() and db_pool:
+                    async with db_pool.acquire() as conn:
+                        row = await conn.fetchrow(
+                            """
+                            INSERT INTO messages (sender_username, sender_name, text)
+                            VALUES ($1, $2, $3)
+                            RETURNING id, created_at
+                        """,
+                            sender_username,
+                            sender_name,
+                            text,
+                        )
 
-                elif action == "edit":
-                    msg_id = data.get("id")
-                    new_text = data.get("text")
-                    await conn.execute("UPDATE messages SET text = $1 WHERE id = $2", new_text, msg_id)
-                    await manager.broadcast({"type": "edit_message", "id": msg_id, "text": new_text})
-
-                elif action == "pin":
-                    msg_id = data.get("id")
-                    is_pinned = data.get("is_pinned")
-                    await conn.execute("UPDATE messages SET is_pinned = $1 WHERE id = $2", is_pinned, msg_id)
-                    await manager.broadcast({"type": "pin_message", "id": msg_id, "is_pinned": is_pinned})
+                        broadcast_payload = {
+                            "type": "new_message",
+                            "message": {
+                                "id": row["id"],
+                                "sender_username": sender_username,
+                                "sender_name": sender_name,
+                                "text": text,
+                                "is_pinned": False,
+                                "created_at": row["created_at"].isoformat(),
+                            },
+                        }
+                        await manager.broadcast(broadcast_payload)
 
     except WebSocketDisconnect:
         manager.disconnect(websocket)
-
-@app.get("/")
-async def get_web_client():
-    if os.path.exists("index.html"):
-        with open("index.html", "r", encoding="utf-8") as f:
-            return HTMLResponse(content=f.read())
-    return HTMLResponse(content="<h1>index.html not found</h1>")
+    except Exception as e:
+        print(f"Ошибка в WebSocket: {e}")
+        manager.disconnect(websocket)
