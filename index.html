@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenMS Web</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            margin: 0; 
+            padding: 15px; 
+            background: #121212; 
+            color: #fff; 
+        }
+        h2 { margin-top: 0; color: #0088cc; }
+        #chat { 
+            height: 75vh; 
+            overflow-y: auto; 
+            border: 1px solid #333; 
+            padding: 12px; 
+            border-radius: 8px; 
+            margin-bottom: 12px; 
+            background: #181818; 
+        }
+        .msg { 
+            margin-bottom: 10px; 
+            background: #282828; 
+            padding: 8px 12px; 
+            border-radius: 8px; 
+            width: fit-content; 
+            max-width: 85%; 
+            word-break: break-word; 
+        }
+        .msg img { 
+            max-width: 100%; 
+            border-radius: 6px; 
+            display: block; 
+            margin-top: 5px; 
+        }
+        .input-box { display: flex; gap: 8px; }
+        input[type="text"] { 
+            flex: 1; 
+            padding: 12px; 
+            border-radius: 8px; 
+            border: 1px solid #333; 
+            background: #222; 
+            color: #fff; 
+            font-size: 16px; 
+        }
+        button { 
+            padding: 12px 18px; 
+            border: none; 
+            border-radius: 8px; 
+            background: #0088cc; 
+            color: #fff; 
+            font-weight: bold; 
+            font-size: 16px; 
+            cursor: pointer;
+        }
+        button:active { background: #006699; }
+    </style>
+</head>
+<body>
+    <h2>OpenMS Web</h2>
+    <div id="chat"></div>
+    <div class="input-box">
+        <input type="text" id="messageText" placeholder="Сообщение..." autocomplete="off"/>
+        <button onclick="sendMessage()">Отправить</button>
+    </div>
+
+    <script>
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+        ws.onmessage = function(event) {
+            const chat = document.getElementById('chat');
+            const message = document.createElement('div');
+            message.className = 'msg';
+            
+            if (event.data.startsWith('/uploads/')) {
+                message.innerHTML = `<img src="${event.data}" />`;
+            } else {
+                message.textContent = event.data;
+            }
+            
+            chat.appendChild(message);
+            chat.scrollTop = chat.scrollHeight;
+        };
+
+        function sendMessage() {
+            const input = document.getElementById("messageText");
+            if (input.value.trim() !== "") {
+                ws.send(input.value);
+                input.value = '';
+            }
+        }
+
+        // Отправка по нажатию Enter
+        document.getElementById("messageText").addEventListener("keypress", function(event) {
+            if (event.key === "Enter") {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</ht
+  ml>
