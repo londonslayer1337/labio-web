@@ -31,6 +31,409 @@
             width: 100%; max-width: 360px; border: 1px solid var(--border-color); text-align: center;
         }
         .auth-card h2 { margin-bottom: 8px; color: var(--primary); }
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>OpenMS Web</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --panel-bg: #1e293b;
+            --chat-bg: #0b1329;
+            --primary: #38bdf8;
+            --primary-hover: #0284c7;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+            --msg-in: #1e293b;
+            --msg-out: #0369a1;
+            --danger: #ef4444;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body, html { height: 100%; background: var(--bg-color); color: var(--text-main); overflow: hidden; }
+
+        /* Экраны Авторизации */
+        .auth-overlay { position: fixed; inset: 0; background: var(--bg-color); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+        .auth-card { background: var(--panel-bg); border-radius: 16px; padding: 24px; width: 100%; max-width: 360px; border: 1px solid var(--border-color); text-align: center; }
+        .auth-card h2 { margin-bottom: 8px; color: var(--primary); }
+        .auth-card p { color: var(--text-muted); font-size: 13px; margin-bottom: 16px; }
+        .input-field { width: 100%; padding: 12px; margin-bottom: 10px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--bg-color); color: #fff; font-size: 14px; outline: none; }
+        .btn-primary { width: 100%; padding: 12px; border-radius: 10px; border: none; background: var(--primary); color: #000; font-weight: bold; font-size: 15px; cursor: pointer; margin-top: 5px; }
+        .toggle-link { color: var(--primary); font-size: 13px; cursor: pointer; margin-top: 12px; display: inline-block; }
+        .status-text { font-size: 12px; text-align: left; margin-top: -6px; margin-bottom: 8px; font-weight: bold; }
+
+        /* Главный интерфейс */
+        .app-container { display: flex; height: 100%; width: 100%; }
+        .sidebar { width: 100%; max-width: 350px; background: var(--panel-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; }
+        @media (max-width: 768px) {
+            .sidebar { max-width: 100%; position: absolute; inset: 0; z-index: 10; }
+            .sidebar.hidden { display: none; }
+        }
+
+        .sidebar-header { padding: 16px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
+        .user-info { display: flex; align-items: center; gap: 10px; }
+        .avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--primary); color: #000; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+        
+        .search-bar { padding: 10px 16px; border-bottom: 1px solid var(--border-color); }
+        .search-input { width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-color); color: #fff; outline: none; }
+
+        .chat-list { flex: 1; overflow-y: auto; }
+        .chat-item { padding: 12px 16px; border-bottom: 1px solid var(--border-color); display: flex; gap: 12px; cursor: pointer; align-items: center; }
+        .chat-item.active { background: var(--border-color); }
+
+        .chat-area { flex: 1; display: flex; flex-direction: column; background: var(--chat-bg); position: relative; }
+        .chat-header { padding: 12px 16px; background: var(--panel-bg); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; gap: 12px; }
+        .back-btn { display: none; background: none; border: none; color: var(--primary); font-size: 20px; cursor: pointer; }
+        @media (max-width: 768px) { .back-btn { display: block; } }
+
+        /* Сообщения */
+        .pinned-bar { background: rgba(56, 189, 248, 0.1); border-bottom: 1px solid var(--border-color); padding: 8px 16px; font-size: 13px; color: var(--primary); display: none; }
+        .messages-container { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+        .msg-bubble { max-width: 75%; padding: 10px 14px; border-radius: 12px; font-size: 15px; word-break: break-word; position: relative; cursor: pointer; }
+        .msg-bubble.in { background: var(--msg-in); align-self: flex-start; border-bottom-left-radius: 2px; }
+        .msg-bubble.out { background: var(--msg-out); align-self: flex-end; border-bottom-right-radius: 2px; }
+        .msg-bubble.pinned { border: 1px solid var(--primary); }
+        .msg-author { font-size: 11px; color: var(--primary); margin-bottom: 4px; font-weight: bold; }
+
+        .input-panel { padding: 12px 16px; background: var(--panel-bg); border-top: 1px solid var(--border-color); display: flex; gap: 10px; }
+        .msg-input { flex: 1; padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--bg-color); color: #fff; outline: none; }
+        .send-btn { padding: 0 20px; border-radius: 10px; border: none; background: var(--primary); color: #000; font-weight: bold; cursor: pointer; }
+
+        /* Контекстное меню для сообщений */
+        .context-menu { display: none; position: absolute; background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 10px; z-index: 300; width: 160px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+        .context-menu-item { padding: 10px 14px; font-size: 14px; cursor: pointer; border-bottom: 1px solid var(--border-color); }
+        .context-menu-item:last-child { border-bottom: none; }
+        .context-menu-item:hover { background: var(--border-color); }
+
+        /* Модальные окна */
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; align-items: center; justify-content: center; }
+        .modal.active { display: flex; }
+    </style>
+</head>
+<body>
+
+    <!-- Вход / Регистрация -->
+    <div id="authScreen" class="auth-overlay">
+        <div class="auth-card">
+            <h2 id="authTitle">Вход в OpenMS</h2>
+            <p id="authSub">Введите @username и пароль</p>
+
+            <input type="text" id="authName" class="input-field" placeholder="Ваше Имя (Никнейм)" style="display:none;">
+            <input type="text" id="authUsername" class="input-field" placeholder="@username" oninput="handleUsernameCheck()">
+            <div id="usernameStatus" class="status-text"></div>
+
+            <input type="password" id="authPassword" class="input-field" placeholder="Пароль">
+
+            <button id="authBtn" class="btn-primary" onclick="submitAuth()">Войти</button>
+            <span class="toggle-link" id="toggleAuthLink" onclick="toggleAuthMode()">Нет аккаунта? Зарегистрироваться</span>
+        </div>
+    </div>
+
+    <!-- Главный экран -->
+    <div class="app-container">
+        <div id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <div class="user-info">
+                    <div id="userAvatar" class="avatar">U</div>
+                    <div>
+                        <div id="profileName" style="font-weight:bold;">Имя</div>
+                        <div id="profileUsername" style="font-size:13px; color:var(--text-muted);">@username</div>
+                    </div>
+                </div>
+                <button onclick="toggleSettings()" style="background:none; border:none; color:var(--text-muted); font-size:20px; cursor:pointer;">⚙️</button>
+            </div>
+
+            <div class="search-bar">
+                <input type="text" id="searchInput" class="search-input" placeholder="Поиск по чатам..." oninput="filterChats()">
+            </div>
+
+            <div id="chatList" class="chat-list">
+                <div class="chat-item active">
+                    <div class="avatar">#</div>
+                    <div>
+                        <div style="font-weight:bold;">Общий чат</div>
+                        <div style="font-size:13px; color:var(--text-muted);">Публичный канал</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="chat-area">
+            <div class="chat-header">
+                <button class="back-btn" onclick="toggleSidebar(true)">←</button>
+                <div class="avatar">#</div>
+                <div>
+                    <div style="font-weight:bold;">Общий чат</div>
+                    <div style="font-size:13px; color:var(--text-muted);">онлайн</div>
+                </div>
+            </div>
+
+            <div id="pinnedBar" class="pinned-bar">📌 Закрепленное сообщение</div>
+
+            <div id="messages" class="messages-container"></div>
+
+            <div class="input-panel">
+                <input type="text" id="messageInput" class="msg-input" placeholder="Написать сообщение..." autocomplete="off">
+                <button class="send-btn" onclick="sendMessage()">Отправить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Контекстное меню -->
+    <div id="contextMenu" class="context-menu">
+        <div class="context-menu-item" onclick="pinSelectedMessage()">📌 Закрепить</div>
+        <div class="context-menu-item" id="editOption" onclick="editSelectedMessage()">✏️ Изменить</div>
+        <div class="context-menu-item" id="deleteOption" style="color:var(--danger);" onclick="deleteSelectedMessage()">🗑 Удалить</div>
+    </div>
+
+    <!-- Настройки -->
+    <div id="settingsModal" class="modal">
+        <div class="auth-card">
+            <h2>Настройки</h2>
+            <br>
+            <input type="text" id="anonPhoneInput" class="input-field" placeholder="+888 0000 0000">
+            <button class="btn-primary" style="background:var(--border-color); color:#fff; margin-bottom:10px;" onclick="saveAnonPhone()">Привязать +888 номер</button>
+            <br>
+            <button class="btn-primary" style="background:var(--danger); color:#fff;" onclick="logout()">Выйти</button>
+            <br><br>
+            <button class="btn-primary" style="background:var(--border-color); color:#fff;" onclick="toggleSettings()">Закрыть</button>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let isRegisterMode = false;
+        let ws = null;
+        let selectedMsgId = null;
+        let selectedMsgElement = null;
+        let checkTimeout = null;
+
+        // --- Авторизация ---
+        function toggleAuthMode() {
+            isRegisterMode = !isRegisterMode;
+            document.getElementById('authTitle').textContent = isRegisterMode ? "Регистрация" : "Вход в OpenMS";
+            document.getElementById('authName').style.display = isRegisterMode ? "block" : "none";
+            document.getElementById('authBtn').textContent = isRegisterMode ? "Зарегистрироваться" : "Войти";
+            document.getElementById('toggleAuthLink').textContent = isRegisterMode ? "Уже есть аккаунт? Войти" : "Нет аккаунта? Зарегистрироваться";
+            document.getElementById('usernameStatus').textContent = "";
+        }
+
+        function handleUsernameCheck() {
+            if (!isRegisterMode) return;
+            clearTimeout(checkTimeout);
+            const username = document.getElementById('authUsername').value.trim();
+            const status = document.getElementById('usernameStatus');
+
+            if (username.length < 3) { status.textContent = ""; return; }
+
+            checkTimeout = setTimeout(async () => {
+                const res = await fetch(`/api/check-username/${username}`);
+                const data = await res.json();
+                if (data.available) {
+                    status.textContent = "✓ Юзернейм свободен";
+                    status.style.color = "#4ade80";
+                } else {
+                    status.textContent = "✕ Юзернейм занят";
+                    status.style.color = "#ef4444";
+                }
+            }, 400);
+        }
+
+        async function submitAuth() {
+            const username = document.getElementById('authUsername').value.trim();
+            const password = document.getElementById('authPassword').value.trim();
+            const displayName = document.getElementById('authName').value.trim();
+
+            const endpoint = isRegisterMode ? '/api/register' : '/api/login';
+            const payload = isRegisterMode ? { username, password, display_name: displayName } : { username, password };
+
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+
+            const data = await res.json();
+            if (res.ok) {
+                if (isRegisterMode) {
+                    alert("Регистрация успешна! Теперь войдите.");
+                    toggleAuthMode();
+                } else {
+                    currentUser = data;
+                    localStorage.setItem('openms_user', JSON.stringify(data));
+                    initApp();
+                }
+            } else {
+                alert(data.detail || "Ошибка входа");
+            }
+        }
+
+        function initApp() {
+            document.getElementById('profileName').textContent = currentUser.display_name;
+            document.getElementById('profileUsername').textContent = currentUser.username;
+            document.getElementById('userAvatar').textContent = currentUser.display_name[0].toUpperCase();
+            if (currentUser.phone) document.getElementById('anonPhoneInput').value = currentUser.phone;
+            document.getElementById('authScreen').style.display = 'none';
+
+            loadHistory();
+            initWebSocket();
+        }
+
+        // --- Загрузка и WebSocket ---
+        async function loadHistory() {
+            const res = await fetch('/api/messages');
+            const messages = await res.json();
+            const container = document.getElementById('messages');
+            container.innerHTML = '';
+            messages.forEach(msg => renderMessage(msg));
+        }
+
+        function initWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+            ws.onmessage = function(e) {
+                const data = JSON.parse(e.data);
+                if (data.type === 'new_message') renderMessage(data);
+                else if (data.type === 'delete_message') {
+                    const el = document.getElementById(`msg-${data.id}`);
+                    if (el) el.remove();
+                } else if (data.type === 'edit_message') {
+                    const el = document.getElementById(`msg-${data.id}`);
+                    if (el) el.querySelector('.msg-text').textContent = data.text;
+                } else if (data.type === 'pin_message') {
+                    updatePinnedMessage(data.id, data.is_pinned);
+                }
+            };
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            if (input.value.trim() !== "" && ws) {
+                ws.send(JSON.stringify({
+                    action: "send",
+                    username: currentUser.username,
+                    sender: currentUser.display_name,
+                    text: input.value.trim()
+                }));
+                input.value = '';
+            }
+        }
+
+        function renderMessage(data) {
+            const container = document.getElementById('messages');
+            const msg = document.createElement('div');
+            const isOut = data.username === currentUser.username;
+
+            msg.id = `msg-${data.id}`;
+            msg.className = `msg-bubble ${isOut ? 'out' : 'in'} ${data.is_pinned ? 'pinned' : ''}`;
+            msg.dataset.id = data.id;
+            msg.dataset.username = data.username;
+            msg.dataset.text = data.text;
+
+            msg.innerHTML = `
+                <div class="msg-author">${data.sender} (${data.username})</div>
+                <div class="msg-text">${data.text}</div>
+            `;
+
+            msg.addEventListener('contextmenu', (e) => openContextMenu(e, msg));
+            msg.addEventListener('click', (e) => openContextMenu(e, msg));
+
+            container.appendChild(msg);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // --- Контекстное меню и взаимодействия ---
+        function openContextMenu(e, element) {
+            e.preventDefault();
+            selectedMsgId = parseInt(element.dataset.id);
+            selectedMsgElement = element;
+
+            const menu = document.getElementById('contextMenu');
+            menu.style.display = 'block';
+            menu.style.left = `${Math.min(e.clientX, window.innerWidth - 170)}px`;
+            menu.style.top = `${Math.min(e.clientY, window.innerHeight - 150)}px`;
+
+            const isOwner = element.dataset.username === currentUser.username;
+            document.getElementById('editOption').style.display = isOwner ? 'block' : 'none';
+            document.getElementById('deleteOption').style.display = (isOwner || currentUser.is_admin) ? 'block' : 'none';
+        }
+
+        document.addEventListener('click', () => {
+            document.getElementById('contextMenu').style.display = 'none';
+        });
+
+        function deleteSelectedMessage() {
+            if (ws && selectedMsgId) {
+                ws.send(JSON.stringify({ action: "delete", id: selectedMsgId }));
+            }
+        }
+
+        function editSelectedMessage() {
+            const currentText = selectedMsgElement.querySelector('.msg-text').textContent;
+            const newText = prompt("Измените сообщение:", currentText);
+            if (newText && newText.trim() !== "" && ws) {
+                ws.send(JSON.stringify({ action: "edit", id: selectedMsgId, text: newText.trim() }));
+            }
+        }
+
+        function pinSelectedMessage() {
+            const isPinned = !selectedMsgElement.classList.contains('pinned');
+            if (ws && selectedMsgId) {
+                ws.send(JSON.stringify({ action: "pin", id: selectedMsgId, is_pinned: isPinned }));
+            }
+        }
+
+        function updatePinnedMessage(id, isPinned) {
+            const el = document.getElementById(`msg-${id}`);
+            if (el) el.classList.toggle('pinned', isPinned);
+            const pinnedBar = document.getElementById('pinnedBar');
+            if (isPinned && el) {
+                pinnedBar.style.display = 'block';
+                pinnedBar.textContent = `📌 Закреплено: ${el.querySelector('.msg-text').textContent}`;
+            }
+        }
+
+        // --- Настройки ---
+        async function saveAnonPhone() {
+            const phone = document.getElementById('anonPhoneInput').value.trim();
+            await fetch('/api/user/update-phone', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ username: currentUser.username, phone })
+            });
+            alert("Анонимный номер привязан!");
+            toggleSettings();
+        }
+
+        function toggleSettings() {
+            document.getElementById('settingsModal').classList.toggle('active');
+        }
+
+        function logout() {
+            localStorage.removeItem('openms_user');
+            location.reload();
+        }
+
+        // Авто-вход из памяти
+        window.onload = function() {
+            const saved = localStorage.getItem('openms_user');
+            if (saved) {
+                currentUser = JSON.parse(saved);
+                initApp();
+            }
+        };
+
+        document.getElementById('messageInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+    </script>
+</body>
+</html>
+
         .auth-card p { color: var(--text-muted); font-size: 14px; margin-bottom: 20px; }
         .input-field {
             width: 100%; padding: 12px; margin-bottom: 12px; border-radius: 10px;
@@ -161,108 +564,3 @@
             <br>
             <button class="btn-primary" style="background:#ef4444; color:#fff;" onclick="logout()">Выйти из аккаунта</button>
             <br><br>
-            <button class="btn-primary" style="background:var(--border-color); color:#fff;" onclick="toggleSettings()">Закрыть</button>
-        </div>
-    </div>
-
-    <script>
-        let currentUser = null;
-        let ws = null;
-
-        function login() {
-            const phone = document.getElementById('anonPhone').value.trim();
-            const name = document.getElementById('displayName').value.trim();
-            const username = document.getElementById('username').value.trim();
-
-            if (!phone.startsWith('+888') || phone.length < 8) {
-                alert('Введите корректный анонимный номер формата +888 XXXX XXXX');
-                return;
-            }
-            if (!name || !username) {
-                alert('Заполните Никнейм и @username');
-                return;
-            }
-
-            currentUser = { phone, name, username: username.startsWith('@') ? username : '@' + username };
-            
-            // Сохраняем UI
-            document.getElementById('profileName').textContent = currentUser.name;
-            document.getElementById('profileUsername').textContent = currentUser.username;
-            document.getElementById('userAvatar').textContent = currentUser.name[0].toUpperCase();
-            document.getElementById('settingsPhone').textContent = 'Номер: ' + currentUser.phone;
-            document.getElementById('authScreen').style.display = 'none';
-
-            initWebSocket();
-        }
-
-        function initWebSocket() {
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
-
-            ws.onmessage = function(event) {
-                const data = JSON.parse(event.data);
-                displayMessage(data);
-            };
-        }
-
-        function sendMessage() {
-            const input = document.getElementById('messageInput');
-            if (input.value.trim() !== "" && ws) {
-                const payload = {
-                    sender: currentUser.name,
-                    username: currentUser.username,
-                    text: input.value.trim()
-                };
-                ws.send(JSON.stringify(payload));
-                input.value = '';
-            }
-        }
-
-        function displayMessage(data) {
-            const container = document.getElementById('messages');
-            const msg = document.createElement('div');
-            const isOut = data.username === currentUser.username;
-            
-            msg.className = `msg-bubble ${isOut ? 'out' : 'in'}`;
-            msg.innerHTML = `
-                <div class="msg-author">${data.sender} (${data.username})</div>
-                <div>${data.text}</div>
-            `;
-            
-            container.appendChild(msg);
-            container.scrollTop = container.scrollHeight;
-        }
-
-        function toggleSidebar(show) {
-            const sidebar = document.getElementById('sidebar');
-            if (show) sidebar.classList.remove('hidden');
-            else sidebar.classList.add('hidden');
-        }
-
-        function toggleSettings() {
-            const modal = document.getElementById('settingsModal');
-            modal.classList.toggle('active');
-        }
-
-        function logout() {
-            location.reload();
-        }
-
-        function filterChats() {
-            const query = document.getElementById('searchInput').value.toLowerCase();
-            const items = document.querySelectorAll('.chat-item');
-            items.forEach(item => {
-                const text = item.textContent.toLowerCase();
-                item.style.display = text.includes(query) ? 'flex' : 'none';
-            });
-        }
-
-        document.getElementById('messageInput').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') sendMessage();
-        });
-    </script>
-</body>
-</html>
-<!DOCTYPE html>
-<html lang="ru">
-<head>
