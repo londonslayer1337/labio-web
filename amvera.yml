@@ -7,4 +7,4 @@ build:
 
 run:
   persistenceMounted: /data
-  script: uvicorn main:app --host 0.0.0.0 --port 80
+  script: uvicorn main:app --host 0.0.0.0 --port ${PORT:-80}
