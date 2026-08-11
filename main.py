@@ -23,7 +23,7 @@ app.add_middleware(
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Берем ссылку на Supabase из переменных окружения (в Hugging Face Settings)
-DATABASE_URL = os.environ.get("https://qcygykbubjgmvgnuyzzw.supabase.co")
+DATABASE_URL = os.environ.get("postgresql://postgres:[Zima26032022!?]@db.qcygykbubjgmvgnuyzzw.supabase.co:5432/postgres")
 
 db_pool = None
 
