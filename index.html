@@ -485,82 +485,335 @@
 
         .input-panel { padding: 12px 16px; background: var(--panel-bg); border-top: 1px solid var(--border-color); display: flex; gap: 10px; }
         .msg-input { flex: 1; padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--bg-color); color: #fff; outline: none; }
-        .send-btn { padding: 0 20px; border-radius: 10px; border: none; background: var(--primary); color: #000; font-weight: bold; cursor: pointer; }
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Labio Messenger</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='110' fill='%23000000'/><g fill='none' stroke='%23FFFFFF' stroke-width='24' stroke-linecap='round' stroke-linejoin='round'><line x1='216' y1='120' x2='296' y2='120'/><path d='M 236,120 L 236,190 L 160,340 A 25,25 0 0,0 182,376 L 330,376 A 25,25 0 0,0 352,340 L 276,190 L 276,120'/><line x1='195' y1='310' x2='317' y2='310' stroke-width='16'/></g><circle cx='256' cy='260' r='10' fill='%23FFFFFF'/><circle cx='275' cy='220' r='7' fill='%23FFFFFF'/></svg>">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
 
-        /* Модальные окна / Настройки */
-        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; align-items: center; justify-content: center; }
-        .modal.active { display: flex; }
+        body {
+            background-color: #0f0f11;
+            color: #ffffff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        #app {
+            width: 100%;
+            max-width: 480px;
+            height: 100vh;
+            background-color: #16161a;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+        }
+
+        header {
+            padding: 16px;
+            background-color: #1c1c21;
+            border-bottom: 1px solid #2a2a32;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        header svg {
+            width: 32px;
+            height: 32px;
+        }
+
+        header h1 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .auth-container {
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            justify-content: center;
+            flex: 1;
+        }
+
+        .auth-container h2 {
+            font-size: 1.5rem;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+
+        input {
+            width: 100%;
+            padding: 14px;
+            border-radius: 8px;
+            border: 1px solid #2a2a32;
+            background-color: #0f0f11;
+            color: #fff;
+            font-size: 1rem;
+            outline: none;
+        }
+
+        input:focus {
+            border-color: #ffffff;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            border-radius: 8px;
+            border: none;
+            background-color: #ffffff;
+            color: #000000;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        .toggle-auth {
+            text-align: center;
+            color: #888899;
+            font-size: 0.9rem;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        #messages {
+            flex: 1;
+            padding: 16px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .message {
+            max-width: 80%;
+            padding: 10px 14px;
+            border-radius: 12px;
+            background-color: #24242d;
+            align-self: flex-start;
+            word-wrap: break-word;
+        }
+
+        .message.own {
+            align-self: flex-end;
+            background-color: #ffffff;
+            color: #000000;
+        }
+
+        .message .sender {
+            font-size: 0.75rem;
+            color: #888899;
+            margin-bottom: 4px;
+        }
+
+        .message.own .sender {
+            color: #555566;
+        }
+
+        .chat-input {
+            padding: 12px 16px;
+            background-color: #1c1c21;
+            border-top: 1px solid #2a2a32;
+            display: flex;
+            gap: 8px;
+        }
+
+        .chat-input input {
+            flex: 1;
+        }
+
+        .chat-input button {
+            width: auto;
+            padding: 0 20px;
+        }
+
+        .hidden {
+            display: none !important;
+        }
     </style>
 </head>
 <body>
 
-    <!-- Вход по анонимному номеру -->
-    <div id="authScreen" class="auth-overlay">
-        <div class="auth-card">
-            <h2>Вход в OpenMS</h2>
-            <p>Введите ваш анонимный номер (+888) и профиль</p>
-            <input type="text" id="anonPhone" class="input-field" placeholder="+888 0000 0000" value="+888 ">
-            <input type="text" id="displayName" class="input-field" placeholder="Имя профиля (Никнейм)">
-            <input type="text" id="username" class="input-field" placeholder="@username">
-            <button class="btn-primary" onclick="login()">Войти</button>
-        </div>
+<div id="app">
+    <header>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+            <rect width="512" height="512" rx="110" fill="#000000"/>
+            <g fill="none" stroke="#FFFFFF" stroke-width="24" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="216" y1="120" x2="296" y2="120"/>
+                <path d="M 236,120 L 236,190 L 160,340 A 25,25 0 0,0 182,376 L 330,376 A 25,25 0 0,0 352,340 L 276,190 L 276,120"/>
+                <line x1="195" y1="310" x2="317" y2="310" stroke-width="16"/>
+            </g>
+            <circle cx="256" cy="260" r="10" fill="#FFFFFF"/>
+            <circle cx="275" cy="220" r="7" fill="#FFFFFF"/>
+        </svg>
+        <h1>Labio</h1>
+    </header>
+
+    <!-- Авторизация / Регистрация -->
+    <div id="authBlock" class="auth-container">
+        <h2 id="authTitle">Вход в Labio</h2>
+        <input type="text" id="usernameInput" placeholder="Логин">
+        <input type="password" id="passwordInput" placeholder="Пароль">
+        <input type="text" id="nameInput" placeholder="Ваше имя" class="hidden">
+        <button id="authBtn" onclick="handleAuth()">Войти</button>
+        <div class="toggle-auth" id="toggleAuth" onclick="toggleAuthMode()">Нет аккаунта? Зарегистрироваться</div>
     </div>
 
-    <!-- Главный интерфейс мессенджера -->
-    <div class="app-container">
-        <!-- Боковое меню -->
-        <div id="sidebar" class="sidebar">
-            <div class="sidebar-header">
-                <div class="user-info">
-                    <div id="userAvatar" class="avatar">U</div>
-                    <div>
-                        <div id="profileName" class="chat-name">Имя</div>
-                        <div id="profileUsername" class="chat-sub">@username</div>
-                    </div>
-                </div>
-                <button onclick="toggleSettings()" style="background:none; border:none; color:var(--text-muted); font-size:20px; cursor:pointer;">⚙️</button>
-            </div>
-
-            <div class="search-bar">
-                <input type="text" id="searchInput" class="search-input" placeholder="Поиск по никнейму или @username..." oninput="filterChats()">
-            </div>
-
-            <div id="chatList" class="chat-list">
-                <div class="chat-item active" onclick="selectChat('Общий чат')">
-                    <div class="avatar">#</div>
-                    <div class="chat-details">
-                        <div class="chat-name">Общий чат</div>
-                        <div class="chat-sub">Публичный канал</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Окно переписки -->
-        <div class="chat-area">
-            <div class="chat-header">
-                <button class="back-btn" onclick="toggleSidebar(true)">←</button>
-                <div id="currentChatAvatar" class="avatar">#</div>
-                <div>
-                    <div id="currentChatTitle" class="chat-name">Общий чат</div>
-                    <div id="currentChatSub" class="chat-sub">онлайн</div>
-                </div>
-            </div>
-
-            <div id="messages" class="messages-container"></div>
-
-            <div class="input-panel">
-                <input type="text" id="messageInput" class="msg-input" placeholder="Написать сообщение..." autocomplete="off">
-                <button class="send-btn" onclick="sendMessage()">Отправить</button>
-            </div>
+    <!-- Чат -->
+    <div id="chatBlock" class="chat-container hidden">
+        <div id="messages"></div>
+        <div class="chat-input">
+            <input type="text" id="msgInput" placeholder="Сообщение..." onkeypress="handleKeyPress(event)">
+            <button onclick="sendMessage()">></button>
         </div>
     </div>
+</div>
 
-    <!-- Модальное окно настроек -->
-    <div id="settingsModal" class="modal">
-        <div class="auth-card">
-            <h2>Настройки</h2>
-            <p id="settingsPhone">Номер: +888 ...</p>
-            <br>
-            <button class="btn-primary" style="background:#ef4444; color:#fff;" onclick="logout()">Выйти из аккаунта</button>
-            <br><br>
+<script>
+    let isRegisterMode = false;
+    let currentUser = null;
+    let ws = null;
+
+    function toggleAuthMode() {
+        isRegisterMode = !isRegisterMode;
+        document.getElementById('authTitle').innerText = isRegisterMode ? 'Регистрация' : 'Вход в Labio';
+        document.getElementById('nameInput').classList.toggle('hidden', !isRegisterMode);
+        document.getElementById('authBtn').innerText = isRegisterMode ? 'Создать аккаунт' : 'Войти';
+        document.getElementById('toggleAuth').innerText = isRegisterMode ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Зарегистрироваться';
+    }
+
+    async function handleAuth() {
+        const username = document.getElementById('usernameInput').value.trim();
+        const password = document.getElementById('passwordInput').value.trim();
+        const displayName = document.getElementById('nameInput').value.trim();
+
+        if (!username || !password) return alert('Заполните все поля');
+
+        const endpoint = isRegisterMode ? '/api/register' : '/api/login';
+        const payload = isRegisterMode 
+            ? { username, password, display_name: displayName || username }
+            : { username, password };
+
+        try {
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Ошибка входа');
+
+            if (isRegisterMode) {
+                alert('Успешная регистрация! Войдите.');
+                toggleAuthMode();
+            } else {
+                currentUser = data.user;
+                openChat();
+            }
+        } catch (e) {
+            alert(e.message);
+        }
+    }
+
+    function openChat() {
+        document.getElementById('authBlock').classList.add('hidden');
+        document.getElementById('chatBlock').classList.remove('hidden');
+
+        loadHistory();
+        connectWebSocket();
+    }
+
+    async function loadHistory() {
+        try {
+            const res = await fetch('/api/messages');
+            const messages = await res.json();
+            const container = document.getElementById('messages');
+            container.innerHTML = '';
+            messages.forEach(renderMessage);
+            scrollToBottom();
+        } catch (e) {
+            console.error('Ошибка загрузки истории:', e);
+        }
+    }
+
+    function connectWebSocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === 'new_message') {
+                renderMessage(data.message);
+                scrollToBottom();
+            }
+        };
+
+        ws.onclose = () => setTimeout(connectWebSocket, 3000);
+    }
+
+    function renderMessage(msg) {
+        const container = document.getElementById('messages');
+        const div = document.createElement('div');
+        const isOwn = currentUser && msg.sender_username === currentUser.username;
+
+        div.className = `message ${isOwn ? 'own' : ''}`;
+        div.innerHTML = `
+            <div class="sender">${msg.sender_name}</div>
+            <div class="text">${msg.text}</div>
+        `;
+        container.appendChild(div);
+    }
+
+    function sendMessage() {
+        const input = document.getElementById('msgInput');
+        const text = input.value.trim();
+        if (!text || !ws) return;
+
+        ws.send(JSON.stringify({
+            type: 'message',
+            sender_username: currentUser.username,
+            sender_name: currentUser.display_name,
+            text: text
+        }));
+
+        input.value = '';
+    }
+
+    function handleKeyPress(e) {
+        if (e.key === 'Enter') sendMessage();
+    }
+
+    function scrollToBottom() {
+        const container = document.getElementById('messages');
+        container.scrollTop = container.scrollHeight;
+    }
+</script>
+</body>
+</html>
+
