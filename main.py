@@ -7,46 +7,60 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from passlib.context import CryptContext
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-# --- НАСТРОЙКИ ХЭШИРОВАНИЯ ---
+# хэшик
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# --- ГЛОБАЛЬНЫЙ ПУЛ СОЕДИНЕНИЙ ---
+# пул
 db_pool: asyncpg.Pool = None
-DATABASE_URL = os.environ.get("postgresql://postgres:[Zima26032022!?]@db.qcygykbubjgmvgnuyzzw.supabase.co:5432/postgres")
+
+# бд
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global db_pool
     if not DATABASE_URL:
-        print("ВНИМАНИЕ: Переменная DATABASE_URL не задана!")
+        print("ОШИБКА: Переменная DATABASE_URL не найдена в окружении!")
     else:
-        db_pool = await asyncpg.create_pool(dsn=DATABASE_URL)
-        print("Подключение к базе данных Supabase установлено.")
+        try:
+            # хуйня
+            dsn = DATABASE_URL
+            if dsn.startswith("postgres://"):
+                dsn = dsn.replace("postgres://", "postgresql://", 1)
 
-        async with db_pool.acquire() as conn:
-            await conn.execute(
+            db_pool = await asyncpg.create_pool(dsn=dsn)
+            print("Успешное подключение к базе данных.")
+
+            # таблички
+            async with db_pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS users (
+                        id SERIAL PRIMARY KEY,
+                        username VARCHAR(64) UNIQUE NOT NULL,
+                        password_hash TEXT NOT NULL,
+                        display_name VARCHAR(128) NOT NULL,
+                        phone VARCHAR(32),
+                        is_admin BOOLEAN DEFAULT FALSE,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    );
+
+                    CREATE TABLE IF NOT EXISTS messages (
+                        id SERIAL PRIMARY KEY,
+                        sender_username VARCHAR(64) NOT NULL,
+                        sender_name VARCHAR(128) NOT NULL,
+                        text TEXT NOT NULL,
+                        is_pinned BOOLEAN DEFAULT FALSE,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    );
                 """
-                CREATE TABLE IF NOT EXISTS users (
-                    id SERIAL PRIMARY KEY,
-                    username TEXT UNIQUE NOT NULL,
-                    password_hash TEXT NOT NULL,
-                    display_name TEXT NOT NULL,
-                    phone TEXT,
-                    is_admin BOOLEAN DEFAULT FALSE
-                );
-                CREATE TABLE IF NOT EXISTS messages (
-                    id SERIAL PRIMARY KEY,
-                    sender_username TEXT NOT NULL,
-                    sender_name TEXT NOT NULL,
-                    text TEXT NOT NULL,
-                    is_pinned BOOLEAN DEFAULT FALSE,
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                );
-            """
-            )
+                )
+                print("Таблицы базы данных проверены/созданы.")
+        except Exception as e:
+            print(f"Ошибка подключения к БД: {e}")
 
     yield
 
@@ -57,7 +71,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Labio Backend", lifespan=lifespan)
 
-# --- CORS МИДЛВАРЬ ДЛЯ РАБОТЫ НА ЛЮБЫХ ДОМЕНАХ ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -67,20 +80,20 @@ app.add_middleware(
 )
 
 
-# --- СХЕМЫ PYDANTIC ---
+# падантки
 class UserRegister(BaseModel):
-    username: str
+    username: str = Field(..., example="@username")
     password: str
     display_name: str
     phone: str = None
 
 
 class UserLogin(BaseModel):
-    username: str
+    username: str = Field(..., example="@username")
     password: str
 
 
-# --- МЕНЕДЖЕР WEBSOCKET ---
+# вебсокет менеджер
 class ConnectionManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
@@ -104,7 +117,6 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
-# --- ХЕЛПЕРЫ ДЛЯ ХЭШИРОВАНИЯ ---
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
@@ -113,30 +125,41 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-# --- ЭНДПОИНТЫ API ---
+# хуйня
+def normalize_username(username: str) -> str:
+    username = username.strip()
+    if not username.startswith("@"):
+        return f"@{username}"
+    return username
+
+
+# апи поинты
 @app.get("/", response_class=HTMLResponse)
 async def get_index():
     if os.path.exists("index.html"):
         with open("index.html", "r", encoding="utf-8") as f:
             return f.read()
-    return HTMLResponse(
-        content="<h1>Labio Messenger Backend</h1><p>Сервер работает корректно.</p>",
-        status_code=200,
-    )
+    return HTMLResponse(content="<h1>Labio Backend Active</h1>", status_code=200)
 
 
 @app.post("/api/register")
 async def register(user: UserRegister):
     if not db_pool:
-        raise HTTPException(status_code=500, detail="База данных не подключена")
+        raise HTTPException(
+            status_code=500,
+            detail="База данных не подключена. Проверьте переменную DATABASE_URL.",
+        )
+
+    clean_username = normalize_username(user.username)
 
     async with db_pool.acquire() as conn:
-        existing_user = await conn.fetchrow(
-            "SELECT id FROM users WHERE username = $1", user.username
+        existing = await conn.fetchrow(
+            "SELECT id FROM users WHERE username = $1", clean_username
         )
-        if existing_user:
+        if existing:
             raise HTTPException(
-                status_code=400, detail="Пользователь с таким логином уже существует"
+                status_code=400,
+                detail=f"Пользователь с тегом {clean_username} уже зарегистрирован",
             )
 
         hashed_pwd = hash_password(user.password)
@@ -145,28 +168,36 @@ async def register(user: UserRegister):
             INSERT INTO users (username, password_hash, display_name, phone)
             VALUES ($1, $2, $3, $4)
         """,
-            user.username,
+            clean_username,
             hashed_pwd,
             user.display_name,
             user.phone,
         )
 
-    return {"status": "ok", "message": "Регистрация прошла успешно"}
+    return {"status": "ok", "message": f"Пользователь {clean_username} создан!"}
 
 
 @app.post("/api/login")
 async def login(user: UserLogin):
     if not db_pool:
-        raise HTTPException(status_code=500, detail="База данных не подключена")
+        raise HTTPException(
+            status_code=500, detail="База данных не подключена"
+        )
+
+    clean_username = normalize_username(user.username)
 
     async with db_pool.acquire() as conn:
         db_user = await conn.fetchrow(
             "SELECT username, password_hash, display_name, is_admin FROM users WHERE username = $1",
-            user.username,
+            clean_username,
         )
 
-        if not db_user or not verify_password(user.password, db_user["password_hash"]):
-            raise HTTPException(status_code=400, detail="Неверный логин или пароль")
+        if not db_user or not verify_password(
+            user.password, db_user["password_hash"]
+        ):
+            raise HTTPException(
+                status_code=400, detail="Неверный @username или пароль"
+            )
 
         return {
             "status": "ok",
@@ -181,7 +212,9 @@ async def login(user: UserLogin):
 @app.get("/api/messages")
 async def get_messages():
     if not db_pool:
-        raise HTTPException(status_code=500, detail="База данных не подключена")
+        raise HTTPException(
+            status_code=500, detail="База данных не подключена"
+        )
 
     async with db_pool.acquire() as conn:
         rows = await conn.fetch(
@@ -199,13 +232,15 @@ async def get_messages():
                 "sender_name": r["sender_name"],
                 "text": r["text"],
                 "is_pinned": r["is_pinned"],
-                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+                "created_at": r["created_at"].isoformat()
+                if r["created_at"]
+                else None,
             }
             for r in rows
         ]
 
 
-# --- WEBSOCKET ДЛЯ ЧАТА В РЕАЛЬНОМ ВРЕМЕНИ ---
+# вебсокет чат
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
@@ -213,7 +248,9 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             data = await websocket.receive_json()
             if data.get("type") == "message":
-                sender_username = data.get("sender_username", "Anon")
+                sender_username = normalize_username(
+                    data.get("sender_username", "@anon")
+                )
                 sender_name = data.get("sender_name", "Аноним")
                 text = data.get("text", "")
 
@@ -230,19 +267,21 @@ async def websocket_endpoint(websocket: WebSocket):
                             text,
                         )
 
-                        await manager.broadcast({
-                            "type": "new_message",
-                            "message": {
-                                "id": row["id"],
-                                "sender_username": sender_username,
-                                "sender_name": sender_name,
-                                "text": text,
-                                "is_pinned": False,
-                                "created_at": row["created_at"].isoformat(),
-                            },
-                        })
+                        await manager.broadcast(
+                            {
+                                "type": "new_message",
+                                "message": {
+                                    "id": row["id"],
+                                    "sender_username": sender_username,
+                                    "sender_name": sender_name,
+                                    "text": text,
+                                    "is_pinned": False,
+                                    "created_at": row["created_at"].isoformat(),
+                                },
+                            }
+                        )
     except WebSocketDisconnect:
         manager.disconnect(websocket)
     except Exception as e:
-        print(f"Ошибка WebSocket: {e}")
+        print(f"Ошибка WS: {e}")
         manager.disconnect(websocket)
