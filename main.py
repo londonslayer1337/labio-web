@@ -14,7 +14,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # --- ГЛОБАЛЬНЫЙ ПУЛ СОЕДИНЕНИЙ ---
 db_pool: asyncpg.Pool = None
-DATABASE_URL = os.environ.get("postgresql://postgres:[Zima26032022123]@db.qcygykbubjgmvgnuyzzw.supabase.co:5432/postgres")
+DATABASE_URL = os.environ.get("postgresql://postgres:[Zima26032022!?]@db.qcygykbubjgmvgnuyzzw.supabase.co:5432/postgres")
 
 
 @asynccontextmanager
