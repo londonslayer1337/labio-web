@@ -9,120 +9,13 @@ from fastapi.responses import HTMLResponse
 from passlib.context import CryptContext
 from pydantic import BaseModel
 
-# --- НАСТРОЙКИ ХЭШИРОВАНИЯ ПАРОЛЕЙ ---
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-# --- ГЛОБАЛЬНЫЙ ПУЛ СОЕДИНЕНИЙ С БАЗОЙ ДАННЫХ ---
-db_pool: asyncpg.Pool = None
-
-# --- ПОДКЛЮЧЕНИЕ К SUPABASE ПО DATABASE_URL ---
-DATABASE_URL = os.environ.get("DATABASE_URL")
-
-
-# --- МЕНЕДЖЕР ЖИЗНЕННОГО ЦИКЛА ПРИЛОЖЕНИЯ ---
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    global db_pool
-    if not DATABASE_URL:
-        print("ВНИМАНИЕ: Переменная DATABASE_URL не задана!")
-    else:
-        # Создаем пул подключений к PostgreSQL (Supabase)
-        db_pool = await asyncpg.create_pool(dsn=DATABASE_URL)
-        print("Подключение к Supabase успешно установлено.")
-
-        # Автоматическое создание таблиц, если их ещё нет в БД
-        async with db_pool.acquire() as conn:
-            await conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS users (
-                    id SERIAL PRIMARY KEY,
-                    username TEXT UNIQUE NOT NULL,
-                    password_hash TEXT NOT NULL,
-                    display_name TEXT NOT NULL,
-                    phone TEXT,
-                    is_admin BOOLEAN DEFAULT FALSE
-                );
-                CREATE TABLE IF NOT EXISTS messages (
-                    id SERIAL PRIMARY KEY,
-                    sender_username TEXT NOT NULL,
-                    sender_name TEXT NOT NULL,
-                    text TEXT NOT NULL,
-                    is_pinned BOOLEAN DEFAULT FALSE,
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                );
-            """
-            )
-
-    yield  # Приложение принимает запросы
-
-    # Завершение работы: закрываем пул подключений
-    if db_pool:
-        await db_pool.close()
-        print("Подключение к базе данных закрыто.")
-
-
-app = FastAPI(title="OpenMS Backend", lifespan=lifespan)
-
-# --- НАСТРОЙКА CORS ДЛЯ РАБОТЫ С КАСТОМНЫМИ ДОМЕНАМИ (openms.ddns.net) ---
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-# --- ПАРАМЕТРЫ И СХЕМЫ PYDANTIC ---
-class UserRegister(BaseModel):
-    username: str
-    password: str
-    display_name: str
-    phone: str = None
-
-
-class UserLogin(BaseModel):
-    username: str
-    password: str
-
-
-class MessageSend(BaseModel):
-    sender_username: str
-    sender_name: str
-    text: str
-
-
-# --- МЕНЕДЖЕР WEBSOCKET СОЕДИНЕНИЙ ---
-class ConnectionManager:
-
-    def __init__(self):
-        self.active_connections: List[WebSocket] = []
-
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-
-    def disconnect(self, websocket: WebSocket):
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
-
-import os
-from contextlib import asynccontextmanager
-from typing import List
-
-import asyncpg
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
-from passlib.context import CryptContext
-from pydantic import BaseModel
-
 # --- НАСТРОЙКИ ХЭШИРОВАНИЯ ---
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # --- ГЛОБАЛЬНЫЙ ПУЛ СОЕДИНЕНИЙ ---
 db_pool: asyncpg.Pool = None
 DATABASE_URL = os.environ.get("DATABASE_URL")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -174,6 +67,7 @@ app.add_middleware(
 )
 
 
+# --- СХЕМЫ PYDANTIC ---
 class UserRegister(BaseModel):
     username: str
     password: str
@@ -186,6 +80,7 @@ class UserLogin(BaseModel):
     password: str
 
 
+# --- МЕНЕДЖЕР WEBSOCKET ---
 class ConnectionManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
@@ -208,13 +103,17 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+
+# --- ХЕЛПЕРЫ ДЛЯ ХЭШИРОВАНИЯ ---
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
+
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
+# --- ЭНДПОИНТЫ API ---
 @app.get("/", response_class=HTMLResponse)
 async def get_index():
     if os.path.exists("index.html"):
@@ -306,6 +205,7 @@ async def get_messages():
         ]
 
 
+# --- WEBSOCKET ДЛЯ ЧАТА В РЕАЛЬНОМ ВРЕМЕНИ ---
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
@@ -345,109 +245,4 @@ async def websocket_endpoint(websocket: WebSocket):
         manager.disconnect(websocket)
     except Exception as e:
         print(f"Ошибка WebSocket: {e}")
-        manager.disconnect(websocket)
-
-    async def broadcast(self, message: dict):
-        for connection in self.active_connections:
-            try:
-                await connection.send_json(message)
-            except Exception:
-                pass
-
-
-manager = ConnectionManager()
-
-
-# --- ХЕЛПЕРЫ ДЛЯ ХЭШИРОВАНИЯ ---
-def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
-
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
-
-
-# --- МАРШРУТЫ API ---
-
-
-@app.get("/", response_class=HTMLResponse)
-async def get_index():
-    """Отдает главную страницу index.html, если она лежит в той же папке."""
-    if os.path.exists("index.html"):
-        with open("index.html", "r", encoding="utf-8") as f:
-            return f.read()
-    return HTMLResponse(
-        content="<h1>OpenMS Server работает</h1><p>Файл index.html не найден в корневой директории.</p>",
-        status_code=200,
-    )
-
-
-@app.post("/api/register")
-async def register(user: UserRegister):
-    if not db_pool:
-        raise HTTPException(
-            status_code=500, detail="База данных не подключена"
-        )
-
-    async with db_pool.acquire() as conn:
-        existing_user = await conn.fetchrow(
-            "SELECT id FROM users WHERE username = $1", user.username
-        )
-        if existing_user:
-            raise HTTPException(
-                status_code=400, detail="Пользователь с таким логином уже существует"
-            )
-
-        hashed_pwd = hash_password(user.password)
-        await conn.execute(
-            """
-            INSERT INTO users (username, password_hash, display_name, phone)
-            VALUES ($1, $2, $3, $4)
-        """,
-            user.username,
-            hashed_pwd,
-            user.display_name,
-            user.phone,
-        )
-
-    return {"status": "ok", "message": "Регистрация прошла успешно"}
-
-
-@app.post("/api/login")
-async def login(user: UserLogin):
-    if not db_pool:
-        raise HTTPException(
-            status_code=500, detail="База данных не подключена"
-        )
-
-    async with db_pool.acquire() as conn:
-        db_user = await conn.fetchrow(
-            "SELECT username, password_hash, display_name, is_admin FROM users WHERE username = $1",
-            user.username,
-        )
-
-        if not db_user or not verify_password(
-            user.password, db_user["password_hash"]
-        ):
-            raise HTTPException(
-                status_code=400, detail="Неверный логин или пароль"
-            )
-
-        return {
-            "status": "ok",
-            "user": {
-                "username": db_user["username"],
-                "display_name": db_user["display_name"],
-                "is_admin": db_user["is_admin"],
-            },
-        }
-
-
-}
-                        await manager.broadcast(broadcast_payload)
-
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
-    except Exception as e:
-        print(f"Ошибка в WebSocket: {e}")
         manager.disconnect(websocket)
