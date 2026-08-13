@@ -2,495 +2,9 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>OpenMS Web</title>
-    <style>
-        :root {
-            --bg-color: #0f172a;
-            --panel-bg: #1e293b;
-            --chat-bg: #0b1329;
-            --primary: #38bdf8;
-            --primary-hover: #0284c7;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --border-color: #334155;
-            --msg-in: #1e293b;
-            --msg-out: #0369a1;
-        }
-
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        body, html { height: 100%; background: var(--bg-color); color: var(--text-main); overflow: hidden; }
-
-        /* Экраны авторизации */
-        .auth-overlay {
-            position: fixed; inset: 0; background: var(--bg-color);
-            display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px;
-        }
-        .auth-card {
-            background: var(--panel-bg); border-radius: 16px; padding: 24px;
-            width: 100%; max-width: 360px; border: 1px solid var(--border-color); text-align: center;
-        }
-        .auth-card h2 { margin-bottom: 8px; color: var(--primary); }
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>OpenMS Web</title>
-    <style>
-        :root {
-            --bg-color: #0f172a;
-            --panel-bg: #1e293b;
-            --chat-bg: #0b1329;
-            --primary: #38bdf8;
-            --primary-hover: #0284c7;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --border-color: #334155;
-            --msg-in: #1e293b;
-            --msg-out: #0369a1;
-            --danger: #ef4444;
-        }
-
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        body, html { height: 100%; background: var(--bg-color); color: var(--text-main); overflow: hidden; }
-
-        /* Экраны Авторизации */
-        .auth-overlay { position: fixed; inset: 0; background: var(--bg-color); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
-        .auth-card { background: var(--panel-bg); border-radius: 16px; padding: 24px; width: 100%; max-width: 360px; border: 1px solid var(--border-color); text-align: center; }
-        .auth-card h2 { margin-bottom: 8px; color: var(--primary); }
-        .auth-card p { color: var(--text-muted); font-size: 13px; margin-bottom: 16px; }
-        .input-field { width: 100%; padding: 12px; margin-bottom: 10px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--bg-color); color: #fff; font-size: 14px; outline: none; }
-        .btn-primary { width: 100%; padding: 12px; border-radius: 10px; border: none; background: var(--primary); color: #000; font-weight: bold; font-size: 15px; cursor: pointer; margin-top: 5px; }
-        .toggle-link { color: var(--primary); font-size: 13px; cursor: pointer; margin-top: 12px; display: inline-block; }
-        .status-text { font-size: 12px; text-align: left; margin-top: -6px; margin-bottom: 8px; font-weight: bold; }
-
-        /* Главный интерфейс */
-        .app-container { display: flex; height: 100%; width: 100%; }
-        .sidebar { width: 100%; max-width: 350px; background: var(--panel-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; }
-        @media (max-width: 768px) {
-            .sidebar { max-width: 100%; position: absolute; inset: 0; z-index: 10; }
-            .sidebar.hidden { display: none; }
-        }
-
-        .sidebar-header { padding: 16px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
-        .user-info { display: flex; align-items: center; gap: 10px; }
-        .avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--primary); color: #000; display: flex; align-items: center; justify-content: center; font-weight: bold; }
-        
-        .search-bar { padding: 10px 16px; border-bottom: 1px solid var(--border-color); }
-        .search-input { width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-color); color: #fff; outline: none; }
-
-        .chat-list { flex: 1; overflow-y: auto; }
-        .chat-item { padding: 12px 16px; border-bottom: 1px solid var(--border-color); display: flex; gap: 12px; cursor: pointer; align-items: center; }
-        .chat-item.active { background: var(--border-color); }
-
-        .chat-area { flex: 1; display: flex; flex-direction: column; background: var(--chat-bg); position: relative; }
-        .chat-header { padding: 12px 16px; background: var(--panel-bg); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; gap: 12px; }
-        .back-btn { display: none; background: none; border: none; color: var(--primary); font-size: 20px; cursor: pointer; }
-        @media (max-width: 768px) { .back-btn { display: block; } }
-
-        /* Сообщения */
-        .pinned-bar { background: rgba(56, 189, 248, 0.1); border-bottom: 1px solid var(--border-color); padding: 8px 16px; font-size: 13px; color: var(--primary); display: none; }
-        .messages-container { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
-        .msg-bubble { max-width: 75%; padding: 10px 14px; border-radius: 12px; font-size: 15px; word-break: break-word; position: relative; cursor: pointer; }
-        .msg-bubble.in { background: var(--msg-in); align-self: flex-start; border-bottom-left-radius: 2px; }
-        .msg-bubble.out { background: var(--msg-out); align-self: flex-end; border-bottom-right-radius: 2px; }
-        .msg-bubble.pinned { border: 1px solid var(--primary); }
-        .msg-author { font-size: 11px; color: var(--primary); margin-bottom: 4px; font-weight: bold; }
-
-        .input-panel { padding: 12px 16px; background: var(--panel-bg); border-top: 1px solid var(--border-color); display: flex; gap: 10px; }
-        .msg-input { flex: 1; padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--bg-color); color: #fff; outline: none; }
-        .send-btn { padding: 0 20px; border-radius: 10px; border: none; background: var(--primary); color: #000; font-weight: bold; cursor: pointer; }
-
-        /* Контекстное меню для сообщений */
-        .context-menu { display: none; position: absolute; background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 10px; z-index: 300; width: 160px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
-        .context-menu-item { padding: 10px 14px; font-size: 14px; cursor: pointer; border-bottom: 1px solid var(--border-color); }
-        .context-menu-item:last-child { border-bottom: none; }
-        .context-menu-item:hover { background: var(--border-color); }
-
-        /* Модальные окна */
-        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; align-items: center; justify-content: center; }
-        .modal.active { display: flex; }
-    </style>
-</head>
-<body>
-
-    <!-- Вход / Регистрация -->
-    <div id="authScreen" class="auth-overlay">
-        <div class="auth-card">
-            <h2 id="authTitle">Вход в OpenMS</h2>
-            <p id="authSub">Введите @username и пароль</p>
-
-            <input type="text" id="authName" class="input-field" placeholder="Ваше Имя (Никнейм)" style="display:none;">
-            <input type="text" id="authUsername" class="input-field" placeholder="@username" oninput="handleUsernameCheck()">
-            <div id="usernameStatus" class="status-text"></div>
-
-            <input type="password" id="authPassword" class="input-field" placeholder="Пароль">
-
-            <button id="authBtn" class="btn-primary" onclick="submitAuth()">Войти</button>
-            <span class="toggle-link" id="toggleAuthLink" onclick="toggleAuthMode()">Нет аккаунта? Зарегистрироваться</span>
-        </div>
-    </div>
-
-    <!-- Главный экран -->
-    <div class="app-container">
-        <div id="sidebar" class="sidebar">
-            <div class="sidebar-header">
-                <div class="user-info">
-                    <div id="userAvatar" class="avatar">U</div>
-                    <div>
-                        <div id="profileName" style="font-weight:bold;">Имя</div>
-                        <div id="profileUsername" style="font-size:13px; color:var(--text-muted);">@username</div>
-                    </div>
-                </div>
-                <button onclick="toggleSettings()" style="background:none; border:none; color:var(--text-muted); font-size:20px; cursor:pointer;">⚙️</button>
-            </div>
-
-            <div class="search-bar">
-                <input type="text" id="searchInput" class="search-input" placeholder="Поиск по чатам..." oninput="filterChats()">
-            </div>
-
-            <div id="chatList" class="chat-list">
-                <div class="chat-item active">
-                    <div class="avatar">#</div>
-                    <div>
-                        <div style="font-weight:bold;">Общий чат</div>
-                        <div style="font-size:13px; color:var(--text-muted);">Публичный канал</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="chat-area">
-            <div class="chat-header">
-                <button class="back-btn" onclick="toggleSidebar(true)">←</button>
-                <div class="avatar">#</div>
-                <div>
-                    <div style="font-weight:bold;">Общий чат</div>
-                    <div style="font-size:13px; color:var(--text-muted);">онлайн</div>
-                </div>
-            </div>
-
-            <div id="pinnedBar" class="pinned-bar">📌 Закрепленное сообщение</div>
-
-            <div id="messages" class="messages-container"></div>
-
-            <div class="input-panel">
-                <input type="text" id="messageInput" class="msg-input" placeholder="Написать сообщение..." autocomplete="off">
-                <button class="send-btn" onclick="sendMessage()">Отправить</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Контекстное меню -->
-    <div id="contextMenu" class="context-menu">
-        <div class="context-menu-item" onclick="pinSelectedMessage()">📌 Закрепить</div>
-        <div class="context-menu-item" id="editOption" onclick="editSelectedMessage()">✏️ Изменить</div>
-        <div class="context-menu-item" id="deleteOption" style="color:var(--danger);" onclick="deleteSelectedMessage()">🗑 Удалить</div>
-    </div>
-
-    <!-- Настройки -->
-    <div id="settingsModal" class="modal">
-        <div class="auth-card">
-            <h2>Настройки</h2>
-            <br>
-            <input type="text" id="anonPhoneInput" class="input-field" placeholder="+888 0000 0000">
-            <button class="btn-primary" style="background:var(--border-color); color:#fff; margin-bottom:10px;" onclick="saveAnonPhone()">Привязать +888 номер</button>
-            <br>
-            <button class="btn-primary" style="background:var(--danger); color:#fff;" onclick="logout()">Выйти</button>
-            <br><br>
-            <button class="btn-primary" style="background:var(--border-color); color:#fff;" onclick="toggleSettings()">Закрыть</button>
-        </div>
-    </div>
-
-    <script>
-        let currentUser = null;
-        let isRegisterMode = false;
-        let ws = null;
-        let selectedMsgId = null;
-        let selectedMsgElement = null;
-        let checkTimeout = null;
-
-        // --- Авторизация ---
-        function toggleAuthMode() {
-            isRegisterMode = !isRegisterMode;
-            document.getElementById('authTitle').textContent = isRegisterMode ? "Регистрация" : "Вход в OpenMS";
-            document.getElementById('authName').style.display = isRegisterMode ? "block" : "none";
-            document.getElementById('authBtn').textContent = isRegisterMode ? "Зарегистрироваться" : "Войти";
-            document.getElementById('toggleAuthLink').textContent = isRegisterMode ? "Уже есть аккаунт? Войти" : "Нет аккаунта? Зарегистрироваться";
-            document.getElementById('usernameStatus').textContent = "";
-        }
-
-        function handleUsernameCheck() {
-            if (!isRegisterMode) return;
-            clearTimeout(checkTimeout);
-            const username = document.getElementById('authUsername').value.trim();
-            const status = document.getElementById('usernameStatus');
-
-            if (username.length < 3) { status.textContent = ""; return; }
-
-            checkTimeout = setTimeout(async () => {
-                const res = await fetch(`/api/check-username/${username}`);
-                const data = await res.json();
-                if (data.available) {
-                    status.textContent = "✓ Юзернейм свободен";
-                    status.style.color = "#4ade80";
-                } else {
-                    status.textContent = "✕ Юзернейм занят";
-                    status.style.color = "#ef4444";
-                }
-            }, 400);
-        }
-
-        async function submitAuth() {
-            const username = document.getElementById('authUsername').value.trim();
-            const password = document.getElementById('authPassword').value.trim();
-            const displayName = document.getElementById('authName').value.trim();
-
-            const endpoint = isRegisterMode ? '/api/register' : '/api/login';
-            const payload = isRegisterMode ? { username, password, display_name: displayName } : { username, password };
-
-            const res = await fetch(endpoint, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(payload)
-            });
-
-            const data = await res.json();
-            if (res.ok) {
-                if (isRegisterMode) {
-                    alert("Регистрация успешна! Теперь войдите.");
-                    toggleAuthMode();
-                } else {
-                    currentUser = data;
-                    localStorage.setItem('openms_user', JSON.stringify(data));
-                    initApp();
-                }
-            } else {
-                alert(data.detail || "Ошибка входа");
-            }
-        }
-
-        function initApp() {
-            document.getElementById('profileName').textContent = currentUser.display_name;
-            document.getElementById('profileUsername').textContent = currentUser.username;
-            document.getElementById('userAvatar').textContent = currentUser.display_name[0].toUpperCase();
-            if (currentUser.phone) document.getElementById('anonPhoneInput').value = currentUser.phone;
-            document.getElementById('authScreen').style.display = 'none';
-
-            loadHistory();
-            initWebSocket();
-        }
-
-        // --- Загрузка и WebSocket ---
-        async function loadHistory() {
-            const res = await fetch('/api/messages');
-            const messages = await res.json();
-            const container = document.getElementById('messages');
-            container.innerHTML = '';
-            messages.forEach(msg => renderMessage(msg));
-        }
-
-        function initWebSocket() {
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
-
-            ws.onmessage = function(e) {
-                const data = JSON.parse(e.data);
-                if (data.type === 'new_message') renderMessage(data);
-                else if (data.type === 'delete_message') {
-                    const el = document.getElementById(`msg-${data.id}`);
-                    if (el) el.remove();
-                } else if (data.type === 'edit_message') {
-                    const el = document.getElementById(`msg-${data.id}`);
-                    if (el) el.querySelector('.msg-text').textContent = data.text;
-                } else if (data.type === 'pin_message') {
-                    updatePinnedMessage(data.id, data.is_pinned);
-                }
-            };
-        }
-
-        function sendMessage() {
-            const input = document.getElementById('messageInput');
-            if (input.value.trim() !== "" && ws) {
-                ws.send(JSON.stringify({
-                    action: "send",
-                    username: currentUser.username,
-                    sender: currentUser.display_name,
-                    text: input.value.trim()
-                }));
-                input.value = '';
-            }
-        }
-
-        function renderMessage(data) {
-            const container = document.getElementById('messages');
-            const msg = document.createElement('div');
-            const isOut = data.username === currentUser.username;
-
-            msg.id = `msg-${data.id}`;
-            msg.className = `msg-bubble ${isOut ? 'out' : 'in'} ${data.is_pinned ? 'pinned' : ''}`;
-            msg.dataset.id = data.id;
-            msg.dataset.username = data.username;
-            msg.dataset.text = data.text;
-
-            msg.innerHTML = `
-                <div class="msg-author">${data.sender} (${data.username})</div>
-                <div class="msg-text">${data.text}</div>
-            `;
-
-            msg.addEventListener('contextmenu', (e) => openContextMenu(e, msg));
-            msg.addEventListener('click', (e) => openContextMenu(e, msg));
-
-            container.appendChild(msg);
-            container.scrollTop = container.scrollHeight;
-        }
-
-        // --- Контекстное меню и взаимодействия ---
-        function openContextMenu(e, element) {
-            e.preventDefault();
-            selectedMsgId = parseInt(element.dataset.id);
-            selectedMsgElement = element;
-
-            const menu = document.getElementById('contextMenu');
-            menu.style.display = 'block';
-            menu.style.left = `${Math.min(e.clientX, window.innerWidth - 170)}px`;
-            menu.style.top = `${Math.min(e.clientY, window.innerHeight - 150)}px`;
-
-            const isOwner = element.dataset.username === currentUser.username;
-            document.getElementById('editOption').style.display = isOwner ? 'block' : 'none';
-            document.getElementById('deleteOption').style.display = (isOwner || currentUser.is_admin) ? 'block' : 'none';
-        }
-
-        document.addEventListener('click', () => {
-            document.getElementById('contextMenu').style.display = 'none';
-        });
-
-        function deleteSelectedMessage() {
-            if (ws && selectedMsgId) {
-                ws.send(JSON.stringify({ action: "delete", id: selectedMsgId }));
-            }
-        }
-
-        function editSelectedMessage() {
-            const currentText = selectedMsgElement.querySelector('.msg-text').textContent;
-            const newText = prompt("Измените сообщение:", currentText);
-            if (newText && newText.trim() !== "" && ws) {
-                ws.send(JSON.stringify({ action: "edit", id: selectedMsgId, text: newText.trim() }));
-            }
-        }
-
-        function pinSelectedMessage() {
-            const isPinned = !selectedMsgElement.classList.contains('pinned');
-            if (ws && selectedMsgId) {
-                ws.send(JSON.stringify({ action: "pin", id: selectedMsgId, is_pinned: isPinned }));
-            }
-        }
-
-        function updatePinnedMessage(id, isPinned) {
-            const el = document.getElementById(`msg-${id}`);
-            if (el) el.classList.toggle('pinned', isPinned);
-            const pinnedBar = document.getElementById('pinnedBar');
-            if (isPinned && el) {
-                pinnedBar.style.display = 'block';
-                pinnedBar.textContent = `📌 Закреплено: ${el.querySelector('.msg-text').textContent}`;
-            }
-        }
-
-        // --- Настройки ---
-        async function saveAnonPhone() {
-            const phone = document.getElementById('anonPhoneInput').value.trim();
-            await fetch('/api/user/update-phone', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ username: currentUser.username, phone })
-            });
-            alert("Анонимный номер привязан!");
-            toggleSettings();
-        }
-
-        function toggleSettings() {
-            document.getElementById('settingsModal').classList.toggle('active');
-        }
-
-        function logout() {
-            localStorage.removeItem('openms_user');
-            location.reload();
-        }
-
-        // Авто-вход из памяти
-        window.onload = function() {
-            const saved = localStorage.getItem('openms_user');
-            if (saved) {
-                currentUser = JSON.parse(saved);
-                initApp();
-            }
-        };
-
-        document.getElementById('messageInput').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') sendMessage();
-        });
-    </script>
-</body>
-</html>
-
-        .auth-card p { color: var(--text-muted); font-size: 14px; margin-bottom: 20px; }
-        .input-field {
-            width: 100%; padding: 12px; margin-bottom: 12px; border-radius: 10px;
-            border: 1px solid var(--border-color); background: var(--bg-color); color: #fff; font-size: 15px; outline: none;
-        }
-        .btn-primary {
-            width: 100%; padding: 12px; border-radius: 10px; border: none;
-            background: var(--primary); color: #000; font-weight: bold; font-size: 16px; cursor: pointer;
-        }
-
-        /* Главный контейнер */
-        .app-container { display: flex; height: 100%; width: 100%; }
-
-        /* Боковая панель (Список чатов) */
-        .sidebar {
-            width: 100%; max-width: 350px; background: var(--panel-bg);
-            border-right: 1px solid var(--border-color); display: flex; flex-direction: column;
-        }
-        @media (max-width: 768px) {
-            .sidebar { max-width: 100%; position: absolute; inset: 0; z-index: 10; }
-            .sidebar.hidden { display: none; }
-        }
-
-        .sidebar-header { padding: 16px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
-        .user-info { display: flex; align-items: center; gap: 10px; }
-        .avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--primary); color: #000; display: flex; align-items: center; justify-content: center; font-weight: bold; }
-        
-        .search-bar { padding: 10px 16px; border-bottom: 1px solid var(--border-color); }
-        .search-input { width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-color); color: #fff; outline: none; }
-
-        .chat-list { flex: 1; overflow-y: auto; }
-        .chat-item { padding: 12px 16px; border-bottom: 1px solid var(--border-color); display: flex; gap: 12px; cursor: pointer; align-items: center; }
-        .chat-item:hover, .chat-item.active { background: var(--border-color); }
-        .chat-details { flex: 1; }
-        .chat-name { font-weight: bold; font-size: 15px; }
-        .chat-sub { color: var(--text-muted); font-size: 13px; }
-
-        /* Область чата */
-        .chat-area { flex: 1; display: flex; flex-direction: column; background: var(--chat-bg); }
-        .chat-header { padding: 12px 16px; background: var(--panel-bg); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; gap: 12px; }
-        .back-btn { display: none; background: none; border: none; color: var(--primary); font-size: 20px; cursor: pointer; }
-        @media (max-width: 768px) { .back-btn { display: block; } }
-
-        .messages-container { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
-        .msg-bubble { max-width: 75%; padding: 10px 14px; border-radius: 12px; font-size: 15px; word-break: break-word; }
-        .msg-bubble.in { background: var(--msg-in); align-self: flex-start; border-bottom-left-radius: 2px; }
-        .msg-bubble.out { background: var(--msg-out); align-self: flex-end; border-bottom-right-radius: 2px; }
-        .msg-author { font-size: 11px; color: var(--primary); margin-bottom: 4px; font-weight: bold; }
-
-        .input-panel { padding: 12px 16px; background: var(--panel-bg); border-top: 1px solid var(--border-color); display: flex; gap: 10px; }
-        .msg-input { flex: 1; padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--bg-color); color: #fff; outline: none; }
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Labio Messenger</title>
+    <!-- Вшитая иконка Labio (белая треугольная колба на черном фоне) -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='110' fill='%23000000'/><g fill='none' stroke='%23FFFFFF' stroke-width='24' stroke-linecap='round' stroke-linejoin='round'><line x1='216' y1='120' x2='296' y2='120'/><path d='M 236,120 L 236,190 L 160,340 A 25,25 0 0,0 182,376 L 330,376 A 25,25 0 0,0 352,340 L 276,190 L 276,120'/><line x1='195' y1='310' x2='317' y2='310' stroke-width='16'/></g><circle cx='256' cy='260' r='10' fill='%23FFFFFF'/><circle cx='275' cy='220' r='7' fill='%23FFFFFF'/></svg>">
     <style>
         * {
@@ -501,7 +15,8 @@
         }
 
         body {
-            background-color: #0f0f11;
+            /* Чистый черный фон для всего экрана */
+            background-color: #000000;
             color: #ffffff;
             display: flex;
             justify-content: center;
@@ -513,16 +28,20 @@
             width: 100%;
             max-width: 480px;
             height: 100vh;
-            background-color: #16161a;
+            /* Почти черный цвет для контейнера приложения */
+            background-color: #050505;
             display: flex;
             flex-direction: column;
-            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+            box-shadow: 0 0 30px rgba(0,0,0,1);
+            border-left: 1px solid #1a1a1a;
+            border-right: 1px solid #1a1a1a;
         }
 
         header {
             padding: 16px;
-            background-color: #1c1c21;
-            border-bottom: 1px solid #2a2a32;
+            /* Очень темно-серый для шапки */
+            background-color: #0a0a0a;
+            border-bottom: 1px solid #1a1a1a;
             display: flex;
             align-items: center;
             gap: 12px;
@@ -534,9 +53,10 @@
         }
 
         header h1 {
-            font-size: 1.2rem;
-            font-weight: 600;
+            font-size: 1.3rem;
+            font-weight: 700;
             letter-spacing: 0.5px;
+            color: #ffffff;
         }
 
         .auth-container {
@@ -549,20 +69,23 @@
         }
 
         .auth-container h2 {
-            font-size: 1.5rem;
-            margin-bottom: 8px;
+            font-size: 1.6rem;
+            margin-bottom: 12px;
             text-align: center;
+            font-weight: 700;
         }
 
         input {
             width: 100%;
-            padding: 14px;
-            border-radius: 8px;
-            border: 1px solid #2a2a32;
-            background-color: #0f0f11;
+            padding: 16px;
+            border-radius: 10px;
+            /* Глубокий черный для полей ввода */
+            border: 1px solid #1a1a1a;
+            background-color: #000000;
             color: #fff;
             font-size: 1rem;
             outline: none;
+            transition: border-color 0.2s;
         }
 
         input:focus {
@@ -571,27 +94,31 @@
 
         button {
             width: 100%;
-            padding: 14px;
-            border-radius: 8px;
+            padding: 16px;
+            border-radius: 10px;
             border: none;
+            /* Чисто белый баттон для контраста */
             background-color: #ffffff;
             color: #000000;
-            font-weight: 600;
+            font-weight: 700;
             font-size: 1rem;
             cursor: pointer;
             transition: opacity 0.2s;
         }
 
         button:hover {
-            opacity: 0.9;
+            opacity: 0.85;
         }
 
         .toggle-auth {
             text-align: center;
-            color: #888899;
+            color: #aaaaaa;
             font-size: 0.9rem;
             cursor: pointer;
-            margin-top: 8px;
+            margin-top: 10px;
+        }
+        .toggle-auth:hover {
+            color: #ffffff;
         }
 
         .chat-container {
@@ -599,48 +126,64 @@
             flex-direction: column;
             flex: 1;
             overflow: hidden;
+            background-color: #050505;
         }
 
         #messages {
             flex: 1;
-            padding: 16px;
+            padding: 20px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 14px;
+        }
+
+        /* Кастомизация скроллбара */
+        #messages::-webkit-scrollbar {
+            width: 6px;
+        }
+        #messages::-webkit-scrollbar-thumb {
+            background-color: #1a1a1a;
+            border-radius: 3px;
         }
 
         .message {
             max-width: 80%;
-            padding: 10px 14px;
-            border-radius: 12px;
-            background-color: #24242d;
+            padding: 12px 16px;
+            border-radius: 14px;
+            /* Чуть более светлый серый для чужих сообщений */
+            background-color: #121212;
             align-self: flex-start;
             word-wrap: break-word;
+            border: 1px solid #1a1a1a;
         }
 
         .message.own {
             align-self: flex-end;
+            /* Чисто белый для своих сообщений */
             background-color: #ffffff;
             color: #000000;
+            border: none;
         }
 
         .message .sender {
             font-size: 0.75rem;
-            color: #888899;
-            margin-bottom: 4px;
+            color: #888888;
+            margin-bottom: 5px;
+            font-weight: 600;
         }
 
         .message.own .sender {
-            color: #555566;
+            color: #555555;
         }
 
         .chat-input {
-            padding: 12px 16px;
-            background-color: #1c1c21;
-            border-top: 1px solid #2a2a32;
+            padding: 16px;
+            /* Очень темно-серый для панели ввода */
+            background-color: #0a0a0a;
+            border-top: 1px solid #1a1a1a;
             display: flex;
-            gap: 8px;
+            gap: 10px;
         }
 
         .chat-input input {
@@ -649,7 +192,7 @@
 
         .chat-input button {
             width: auto;
-            padding: 0 20px;
+            padding: 0 24px;
         }
 
         .hidden {
@@ -661,6 +204,7 @@
 
 <div id="app">
     <header>
+        <!-- SVG иконка Labio -->
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
             <rect width="512" height="512" rx="110" fill="#000000"/>
             <g fill="none" stroke="#FFFFFF" stroke-width="24" stroke-linecap="round" stroke-linejoin="round">
@@ -674,17 +218,17 @@
         <h1>Labio</h1>
     </header>
 
-    <!-- Авторизация / Регистрация -->
+    <!-- Блок Авторизации -->
     <div id="authBlock" class="auth-container">
         <h2 id="authTitle">Вход в Labio</h2>
         <input type="text" id="usernameInput" placeholder="Логин">
         <input type="password" id="passwordInput" placeholder="Пароль">
-        <input type="text" id="nameInput" placeholder="Ваше имя" class="hidden">
+        <input type="text" id="nameInput" placeholder="Ваше имя (для регистрации)" class="hidden">
         <button id="authBtn" onclick="handleAuth()">Войти</button>
         <div class="toggle-auth" id="toggleAuth" onclick="toggleAuthMode()">Нет аккаунта? Зарегистрироваться</div>
     </div>
 
-    <!-- Чат -->
+    <!-- Блок Чата -->
     <div id="chatBlock" class="chat-container hidden">
         <div id="messages"></div>
         <div class="chat-input">
@@ -699,11 +243,14 @@
     let currentUser = null;
     let ws = null;
 
+    // Определяем базовый URL для API (пустой для относительных запросов)
+    const API_URL = ''; 
+
     function toggleAuthMode() {
         isRegisterMode = !isRegisterMode;
-        document.getElementById('authTitle').innerText = isRegisterMode ? 'Регистрация' : 'Вход в Labio';
+        document.getElementById('authTitle').innerText = isRegisterMode ? 'Создать аккаунт' : 'Вход в Labio';
         document.getElementById('nameInput').classList.toggle('hidden', !isRegisterMode);
-        document.getElementById('authBtn').innerText = isRegisterMode ? 'Создать аккаунт' : 'Войти';
+        document.getElementById('authBtn').innerText = isRegisterMode ? 'Зарегистрироваться' : 'Войти';
         document.getElementById('toggleAuth').innerText = isRegisterMode ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Зарегистрироваться';
     }
 
@@ -712,7 +259,7 @@
         const password = document.getElementById('passwordInput').value.trim();
         const displayName = document.getElementById('nameInput').value.trim();
 
-        if (!username || !password) return alert('Заполните все поля');
+        if (!username || !password) return alert('Заполните логин и пароль');
 
         const endpoint = isRegisterMode ? '/api/register' : '/api/login';
         const payload = isRegisterMode 
@@ -720,17 +267,17 @@
             : { username, password };
 
         try {
-            const res = await fetch(endpoint, {
+            const res = await fetch(API_URL + endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
 
             const data = await res.json();
-            if (!res.ok) throw new Error(data.detail || 'Ошибка входа');
+            if (!res.ok) throw new Error(data.detail || 'Ошибка авторизации');
 
             if (isRegisterMode) {
-                alert('Успешная регистрация! Войдите.');
+                alert('Регистрация успешна! Теперь войдите.');
                 toggleAuthMode();
             } else {
                 currentUser = data.user;
@@ -744,27 +291,34 @@
     function openChat() {
         document.getElementById('authBlock').classList.add('hidden');
         document.getElementById('chatBlock').classList.remove('hidden');
-
         loadHistory();
         connectWebSocket();
     }
 
     async function loadHistory() {
         try {
-            const res = await fetch('/api/messages');
+            const res = await fetch(API_URL + '/api/messages');
             const messages = await res.json();
             const container = document.getElementById('messages');
-            container.innerHTML = '';
+            container.innerHTML = ''; // Очистить перед загрузкой
             messages.forEach(renderMessage);
             scrollToBottom();
         } catch (e) {
             console.error('Ошибка загрузки истории:', e);
+            // Если база не подключена, messages может быть json-ом с ошибкой
+            const container = document.getElementById('messages');
+            container.innerHTML = '<div style="text-align:center; color:#888; padding:20px;">Ошибка загрузки истории. Проверьте DATABASE_URL.</div>';
         }
     }
 
     function connectWebSocket() {
+        // Автоматическое определение протокола (ws или wss)
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
+        
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => console.log('WebSocket подключен');
 
         ws.onmessage = (event) => {
             const data = JSON.parse(event.data);
@@ -774,7 +328,12 @@
             }
         };
 
-        ws.onclose = () => setTimeout(connectWebSocket, 3000);
+        ws.onerror = (e) => console.error('Ошибка WebSocket:', e);
+        
+        ws.onclose = () => {
+            console.log('WebSocket закрыт. Переподключение...');
+            setTimeout(connectWebSocket, 3000);
+        };
     }
 
     function renderMessage(msg) {
@@ -793,7 +352,7 @@
     function sendMessage() {
         const input = document.getElementById('msgInput');
         const text = input.value.trim();
-        if (!text || !ws) return;
+        if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
 
         ws.send(JSON.stringify({
             type: 'message',
@@ -816,4 +375,3 @@
 </script>
 </body>
 </html>
-
