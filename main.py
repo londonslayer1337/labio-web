@@ -1,4 +1,5 @@
 import os
+import ssl
 from contextlib import asynccontextmanager
 from typing import List
 
@@ -15,26 +16,42 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # пул
 db_pool: asyncpg.Pool = None
 
-# бд
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global db_pool
+    print(
+        f"--- ИНИЦИАЛИЗАЦИЯ: DATABASE_URL = {DATABASE_URL[:25] if DATABASE_URL else 'НЕ НАЙДЕНА'}... ---"
+    )
+
     if not DATABASE_URL:
-        print("ОШИБКА: Переменная DATABASE_URL не найдена в окружении!")
+        print("❌ CRITICAL ERROR: Переменная DATABASE_URL пустая или не задана!")
     else:
         try:
-            # хуйня
-            dsn = DATABASE_URL
+            dsn = DATABASE_URL.strip()
+
+            # асинкпг
             if dsn.startswith("postgres://"):
                 dsn = dsn.replace("postgres://", "postgresql://", 1)
 
-            db_pool = await asyncpg.create_pool(dsn=dsn)
-            print("Успешное подключение к базе данных.")
+            # настройки хуйни
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
 
-            # таблички
+            print("Попытка подключения к бд")
+
+            db_pool = await asyncpg.create_pool(
+                dsn=dsn,
+                ssl=ctx,
+                min_size=1,
+                max_size=10,
+                timeout=15.0,
+            )
+            print("✅ Успешное подключение к бд!")
+
             async with db_pool.acquire() as conn:
                 await conn.execute(
                     """
@@ -58,9 +75,9 @@ async def lifespan(app: FastAPI):
                     );
                 """
                 )
-                print("Таблицы базы данных проверены/созданы.")
+                print("✅ Таблицы созданы.")
         except Exception as e:
-            print(f"Ошибка подключения к БД: {e}")
+            print(f"❌ ПОЛНАЯ ОШИБКА ПОДКЛЮЧЕНИЯ К БД: {type(e).__name__}: {e}")
 
     yield
 
@@ -80,7 +97,7 @@ app.add_middleware(
 )
 
 
-# падантки
+# падантик
 class UserRegister(BaseModel):
     username: str = Field(..., example="@username")
     password: str
@@ -125,7 +142,6 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-# хуйня
 def normalize_username(username: str) -> str:
     username = username.strip()
     if not username.startswith("@"):
@@ -133,7 +149,7 @@ def normalize_username(username: str) -> str:
     return username
 
 
-# апи поинты
+# апи эндпоинты
 @app.get("/", response_class=HTMLResponse)
 async def get_index():
     if os.path.exists("index.html"):
@@ -147,7 +163,7 @@ async def register(user: UserRegister):
     if not db_pool:
         raise HTTPException(
             status_code=500,
-            detail="База данных не подключена. Проверьте переменную DATABASE_URL.",
+            detail="База данных не подключена (db_pool is None). Проверьте логи сервера.",
         )
 
     clean_username = normalize_username(user.username)
@@ -159,7 +175,7 @@ async def register(user: UserRegister):
         if existing:
             raise HTTPException(
                 status_code=400,
-                detail=f"Пользователь с тегом {clean_username} уже зарегистрирован",
+                detail=f"Пользователь {clean_username} уже зарегистрирован",
             )
 
         hashed_pwd = hash_password(user.password)
@@ -240,7 +256,6 @@ async def get_messages():
         ]
 
 
-# вебсокет чат
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
